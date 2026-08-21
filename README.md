@@ -8,6 +8,15 @@ We will explore how advanced mathematical modeling and image processing are revo
 
 > If you encountered any issues or errors in the code or lectures, please feel free to let me know. I will be more than happy to fix them and update the repository accordingly. Your feedback is highly appreciated and will help me improve the quality of the content provided in this series.
 
+
+## Full Playlist and Videos
+
+This series is your gateway to the fascinating world of applying stochastic and geometric models of medical imaging.
+
+**Playlists**:
+
+> Playlist from Fall 2026 (AI-Generated Lectures): https://www.youtube.com/playlist?list=PLW-vvR61gDwc
+
 ## Programming Language and Libraries
 
 This course heavily utilizes **MATLAB** for medical image processing, stochastic modeling, and geometric analysis. All scripts and functions require MATLAB (R2022b or newer recommended) with the **Image Processing Toolbox** installed.
