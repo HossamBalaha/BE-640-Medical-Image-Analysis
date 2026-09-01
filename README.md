@@ -6,15 +6,43 @@ This course offers both theoretical and practical knowledge about the theory of 
 
 We will explore how advanced mathematical modeling and image processing are revolutionizing bioengineering, particularly in analyzing and interpreting modalities such as CT, MRI, Ultrasound, PET, and SPECT. Join us as we uncover the latest advancements and methodologies in this exciting intersection of technology, mathematics, and healthcare. Whether you are a student, researcher, or simply curious about the future of healthcare technology, this repository offers valuable insights into the innovative applications of stochastic and geometric models in medical image analysis.
 
-> If you encountered any issues or errors in the code or lectures, please feel free to let me know. I will be more than happy to fix them and update the repository accordingly. Your feedback is highly appreciated and will help me improve the quality of the content provided in this series.
+> If you encounter any issues or errors in the code or lectures, please feel free to let me know. I will be more than happy to fix them and update the repository accordingly. Your feedback is highly appreciated and will help me improve the quality of the content provided in this series.
 
+## Dataset
+
+A curated subset of the **Chest CT Segmentation** dataset is included in the root `Dataset` folder to be used for the course assignments and mini-projects. 
+
+### Folder Structure
+The dataset is split into training and testing subsets. Each subset contains the original CT images and their corresponding expert-drawn segmentation masks:
+
+```text
+Dataset/Sample1/
+├── train/
+│   ├── images/   (10 axial chest CT slices in JPG format)
+│   └── masks/    (10 corresponding RGB segmentation masks)
+└── test/
+    ├── images/   (3 held-out axial chest CT slices)
+    └── masks/    (3 corresponding RGB segmentation masks)
+```
+
+### Mask Color Coding
+The segmentation masks are provided in **RGB format**. When processing these masks in MATLAB, you must extract the specific color channels to isolate the anatomical structures:
+*   **Blue Channel:** Lungs
+*   **Green Channel:** Heart
+*   **Red Channel:** Trachea
+*   **Black Background:** Other / Non-target tissues
+
+### Data Source and Attribution
+This dataset was modified from the Lung segmentation dataset by Kónya et al., 2020. The original NRRD files were re-saved as RGB images for ease of use in standard image processing pipelines.
+
+*   **Original Dataset:** [Chest CT Segmentation by Marco Polo on Kaggle](https://www.kaggle.com/datasets/polomarco/chest-ct-segmentation)
+*   **Original Source:** Kónya et al., 2020 ([CT Lung, Heart & Trachea Segmentation](https://www.kaggle.com/sandorkonya/ct-lung-heart-trachea-segmentation))
 
 ## Full Playlist and Videos
 
 This series is your gateway to the fascinating world of applying stochastic and geometric models of medical imaging.
 
 **Playlists**:
-
 > Playlist from Fall 2026 (AI-Generated Lectures): https://www.youtube.com/playlist?list=PLW-vvR61gDwc
 
 ## Programming Language and Libraries
@@ -40,11 +68,11 @@ Unlike Python-based courses, this repository relies on MATLAB. To set up your wo
    addpath(genpath(pwd));
    savepath;
    ```
-4. You are now ready to run the lecture scripts and project templates located in the `Lecture Scripts` and `Projects` folders.
+4. You are now ready to run the lecture scripts and project templates located in the `Lecture Scripts` and `Projects` folders. The provided scripts are configured to automatically look for the data in the `./../Dataset/` directory structure.
 
 **Code**:
 
-All code used in the lectures (including the histogram estimation, Gaussian intensity modeling, and mask-based training scripts) will be available in this GitHub repository in the `Lecture Scripts` folder. 
+All code used in the lectures (including the histogram estimation, Gaussian intensity modeling, Parzen window estimation, and mask-based training scripts) will be available in this GitHub repository in the `Lecture Scripts` folder. 
 
 ## Copyright and License
 
@@ -68,11 +96,20 @@ If you find this series helpful and use it in your research or projects, please 
 }
 ```
 
+If you use the included dataset in your work, please cite the original authors:
+
+```bibtex
+@misc{polo2020chestct,
+  author = {Polo, Marco},
+  title = {Chest CT Segmentation},
+  year = {2020},
+  publisher = {Kaggle},
+  howpublished = {\url{https://www.kaggle.com/datasets/polomarco/chest-ct-segmentation}}
+}
+```
+
 ## Contact
 
-This series is prepared and presented by `Hossam Magdy Balaha` from the University of Louisville's J.B. Speed School of
-Engineering.
+This series is prepared and presented by `Hossam Magdy Balaha` from the University of Louisville's J.B. Speed School of Engineering.
 
-For any questions or inquiries, please contact me using the contact information available on my CV at the following
-link: https://hossambalaha.github.io/
-```
+For any questions or inquiries, please contact me using the contact information available on my CV at the following link: https://hossambalaha.github.io/
