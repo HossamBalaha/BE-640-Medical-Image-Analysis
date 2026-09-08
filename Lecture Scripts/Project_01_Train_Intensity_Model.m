@@ -91,8 +91,11 @@ end
 % Add a main title to the entire figure window.
 sgtitle("First Five Training Images, Original Masks, and Extracted Lung Masks");
 
-% Loop through each of the 10 training pairs for model estimation.
-for fileIndex = 1:1:10
+% Determine the number of train files available.
+numTrainFiles = length(trainingImageFiles);
+
+% Loop through each of the N training pairs for model estimation.
+for fileIndex = 1:1:numTrainFiles
     % Construct the full path to the current training image.
     currentImagePath = fullfile(trainingImageDir, trainingImageFiles(fileIndex).name);
     % Read the current training image and convert it to double precision.
