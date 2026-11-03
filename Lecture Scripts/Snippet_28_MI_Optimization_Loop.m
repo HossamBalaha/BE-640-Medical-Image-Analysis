@@ -17,7 +17,7 @@ movingImageRGB = double(imread("MovingReg2.jpg"));
 misalignedImage = movingImageRGB(:, :, 1);
 
 % --- Optimization Setup ---
-% IMPORTANT: Start far away from the solution to prove the optimizer works.
+% Start far away from the solution to prove the optimizer works.
 initialGuess = -60;
 % Set the optimization options to display iteration details.
 options = optimset("Display", "iter");
