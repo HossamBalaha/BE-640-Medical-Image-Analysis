@@ -1,0 +1,350 @@
+% Clear the command window.
+clc;
+% Close all open figure windows.
+close all;
+% Clear all variables from the workspace.
+clear all;
+
+% --- Fixed Hyperparameters ---
+% Define the number of iterations for the GVF solver (Increased for large organs).
+gvfIterations = 2000;
+% Define the full number of iterations for the final snake evolution.
+snakeIterations = 2000;
+% Define the number of iterations for the quick tuning phase.
+tuningIterations = 750;
+% Define the initial radius for the snake.
+initialRadius = 20;
+% Define the number of points in the snake.
+numPoints = 150;
+
+% --- Hyperparameters for Tuning ---
+% Define the list of internal elasticity values to test.
+alphaList = 0.05:0.01:0.20;   
+% Define the list of external GVF attraction values to test.
+betaList = 1.0:0.1:4.0;       
+% Define the list of outward inflation values to test.
+balloonList = 0.05:0.01:0.20; 
+
+% --- Data Loading & Preprocessing ---
+% Load the input image and convert to double precision.
+inputImageRGB = double(imread("FixedReg.jpg"));
+% Extract the first channel to create a grayscale image.
+inputImage = inputImageRGB(:, :, 1);
+% Get the dimensions of the input image.
+[imageHeight, imageWidth] = size(inputImage);
+
+% --- Step 1: Compute Robust GVF Field (Fixed Parameters) ---
+% Use a moderate blur to remove noise but keep edges.
+blurSigma = 2.0;
+% Calculate the kernel size based on the blur sigma.
+kernelSize = 2 * ceil(3 * blurSigma) + 1;
+% Calculate the center of the kernel.
+kernelCenter = (kernelSize - 1) / 2;
+% Initialize the Gaussian kernel matrix.
+gaussianKernel = zeros(kernelSize, kernelSize);
+
+% Loop through each row of the kernel.
+for i = 1:1:kernelSize
+    % Loop through each column of the kernel.
+    for j = 1:1:kernelSize
+        % Calculate the squared distance from the center.
+        distanceSquared = ((i - 1 - kernelCenter)^2 + (j - 1 - kernelCenter)^2);
+        % Calculate the Gaussian value at this position.
+        gaussianKernel(i, j) = exp(-distanceSquared / (2 * blurSigma^2));
+        % End the column loop.
+    end
+    % End the row loop.
+end
+
+% Normalize the kernel so that it sums to 1.
+gaussianKernel = gaussianKernel / sum(sum(gaussianKernel));
+% Apply the Gaussian filter using convolution.
+blurredImage = conv2(inputImage, gaussianKernel, "same");
+
+% Normalize the image to the range [0, 1].
+normalizedImage = blurredImage / max(blurredImage(:));
+
+% Use Sobel operators for stronger edge detection.
+sobelX = [-1 0 1; -2 0 2; -1 0 1];
+% Transpose the Sobel X operator to get the Sobel Y operator.
+sobelY = sobelX';
+% Calculate the gradient in the X direction.
+gradientX = conv2(normalizedImage, sobelX, "same");
+% Calculate the gradient in the Y direction.
+gradientY = conv2(normalizedImage, sobelY, "same");
+
+% Calculate the squared gradient magnitude (Edge Map).
+gradientMagnitudeSquared = gradientX.^2 + gradientY.^2;
+
+% Initialize the horizontal GVF field.
+gvfU = gradientX;
+% Initialize the vertical GVF field.
+gvfV = gradientY;
+
+% Define the GVF diffusion parameter.
+mu = 0.1; 
+% Define the 3x3 discrete Laplacian operator for diffusion.
+laplacianKernel = [0 1 0; 1 -4 1; 0 1 0];
+% Define the time step for iterative convergence.
+timeStep = 0.2; 
+
+% Display a message indicating the GVF computation has started.
+fprintf("Computing GVF Field...\n");
+% Loop through the GVF iterations.
+for iter = 1:1:gvfIterations
+    % Calculate the Laplacian of the current U field.
+    laplacianU = conv2(gvfU, laplacianKernel, "same");
+    % Calculate the Laplacian of the current V field.
+    laplacianV = conv2(gvfV, laplacianKernel, "same");
+    % Calculate the attraction term for U.
+    attractionU = gradientMagnitudeSquared .* (gvfU - gradientX);
+    % Calculate the attraction term for V.
+    attractionV = gradientMagnitudeSquared .* (gvfV - gradientY);
+    % Update the U field using the Euler-Lagrange equation.
+    gvfU = gvfU + timeStep * (mu * laplacianU - (1 - mu) * attractionU);
+    % Update the V field using the Euler-Lagrange equation.
+    gvfV = gvfV + timeStep * (mu * laplacianV - (1 - mu) * attractionV);
+    % End the GVF iteration loop.
+end
+% Display a message indicating the GVF computation is complete.
+fprintf("GVF Field Computed.\n");
+
+% --- Step 2: Automated Parameter Tuning (Snake Dynamics Only) ---
+% Generate the full grid of combinations using ndgrid.
+[alphaGrid, betaGrid, balloonGrid] = ndgrid(alphaList, betaList, balloonList);
+% Flatten the grids into a single parameter space matrix.
+parameterSpace = [alphaGrid(:), betaGrid(:), balloonGrid(:)];
+% Get the number of configurations to test.
+numConfigs = size(parameterSpace, 1);
+% Initialize an array to store the scores for each configuration.
+configScores = zeros(1, numConfigs);
+
+% Define the center X coordinate for initialization.
+centerX = round(imageWidth / 3);
+% Define the center Y coordinate for initialization.
+centerY = round(imageHeight / 2);
+
+% Display a message indicating the grid search has started.
+fprintf("Starting Grid Search (%d configurations)...\n", numConfigs);
+% Loop through each configuration in the parameter space.
+for configIdx = 1:1:numConfigs
+    % Extract the current alpha parameter.
+    currentAlpha = parameterSpace(configIdx, 1);
+    % Extract the current beta parameter.
+    currentBeta = parameterSpace(configIdx, 2);
+    % Extract the current balloon force parameter.
+    currentBalloon = parameterSpace(configIdx, 3);
+
+    % Initialize the snake X coordinates.
+    tempSnakeX = zeros(1, numPoints);
+    % Initialize the snake Y coordinates.
+    tempSnakeY = zeros(1, numPoints);
+    
+    % Loop to initialize the snake as a circle.
+    for k = 1:1:numPoints
+        % Calculate the angle for the current point.
+        theta = 2 * pi * (k - 1) / numPoints;
+        % Calculate the initial X coordinate.
+        tempSnakeX(k) = centerX + initialRadius * cos(theta);
+        % Calculate the initial Y coordinate.
+        tempSnakeY(k) = centerY + initialRadius * sin(theta);
+        % End the initialization loop.
+    end
+
+    % Evolve the snake for the tuning phase.
+    [finalSnakeX, finalSnakeY] = EvolveSnake(tempSnakeX, tempSnakeY, currentAlpha, currentBeta, currentBalloon, gvfU, gvfV, imageHeight, imageWidth, numPoints, tuningIterations);
+
+    % Calculate the score based on the mean gradient magnitude at the contour.
+    score = CalculateEdgeScore(finalSnakeX, finalSnakeY, gradientMagnitudeSquared, imageHeight, imageWidth);
+    % Store the score for the current configuration.
+    configScores(configIdx) = score;
+
+    % Display progress update every 10 configurations.
+    if (mod(configIdx, 10) == 0)
+        % Print the current progress and best score.
+        fprintf("Processed %d/%d configs. Best Score so far: %.4f\n", configIdx, numConfigs, max(configScores));
+        % End the progress check.
+    end
+    % End the configuration loop.
+end
+
+% Find the index of the configuration with the highest score.
+[bestScore, bestConfigIdx] = max(configScores);
+% Display the best configuration found.
+fprintf("Best Configuration: alpha=%.2f, beta=%.1f, balloon=%.2f (Score: %.4f)\n", ...
+    parameterSpace(bestConfigIdx, 1), parameterSpace(bestConfigIdx, 2), parameterSpace(bestConfigIdx, 3), bestScore);
+
+% Extract the best alpha parameter.
+bestAlpha = parameterSpace(bestConfigIdx, 1);
+% Extract the best beta parameter.
+bestBeta = parameterSpace(bestConfigIdx, 2);
+% Extract the best balloon force parameter.
+bestBalloon = parameterSpace(bestConfigIdx, 3);
+
+% --- Step 3: Final Evolution ---
+% Initialize the final snake X coordinates.
+snakeX = zeros(1, numPoints);
+% Initialize the final snake Y coordinates.
+snakeY = zeros(1, numPoints);
+
+% Loop to initialize the final snake as a circle.
+for k = 1:1:numPoints
+    % Calculate the angle for the current point.
+    theta = 2 * pi * (k - 1) / numPoints;
+    % Calculate the initial X coordinate.
+    snakeX(k) = centerX + initialRadius * cos(theta);
+    % Calculate the initial Y coordinate.
+    snakeY(k) = centerY + initialRadius * sin(theta);
+    % End the initialization loop.
+end
+
+% Store the initial snake X coordinates for visualization.
+initialSnakeX = snakeX;
+% Store the initial snake Y coordinates for visualization.
+initialSnakeY = snakeY;
+
+% Evolve the snake with the best parameters for the full number of iterations.
+[snakeX, snakeY] = EvolveSnake(snakeX, snakeY, bestAlpha, bestBeta, bestBalloon, gvfU, gvfV, imageHeight, imageWidth, numPoints, snakeIterations);
+
+% --- Step 4: Visualization ---
+% Open a new figure window for the final segmentation.
+figure("Color", "w");
+% Display the original input image.
+imshow(inputImage, []);
+% Hold the current plot to overlay the snake contours.
+hold on;
+% Plot the initial snake in green and close the loop.
+plot([initialSnakeX, initialSnakeX(1)], [initialSnakeY, initialSnakeY(1)], "g--", "LineWidth", 2);
+% Plot the final evolved snake in red and close the loop.
+plot([snakeX, snakeX(1)], [snakeY, snakeY(1)], "r-", "LineWidth", 2);
+% Add a title to the figure including the best parameters.
+title(sprintf("Final Segmentation (alpha=%.2f, beta=%.1f)", bestAlpha, bestBeta));
+% Add a legend to the figure.
+legend("Initial", "Final");
+% Release the hold on the plot.
+hold off;
+
+% --- GVF Vector Field Visualization ---
+% Open a new figure window for the vector field.
+figure("Color", "w");
+% Display the normalized image as the background.
+imshow(normalizedImage, []);
+% Hold the current plot to overlay the arrows.
+hold on;
+% Define the downsampling stride to keep the arrow field readable.
+stride = 15;
+% Create a 2D grid of column and row coordinates for the quiver plot.
+[colGrid, rowGrid] = meshgrid(1:stride:imageWidth, 1:stride:imageHeight);
+% Extract the downsampled horizontal component of the GVF field.
+gvfUsub = gvfU(1:stride:end, 1:stride:end);
+% Extract the downsampled vertical component of the GVF field.
+gvfVsub = gvfV(1:stride:end, 1:stride:end);
+% Plot the GVF arrows in blue using the matching 2D arrays.
+quiver(colGrid, rowGrid, gvfUsub, gvfVsub, 2, "b");
+% Add a title to the figure.
+title("GVF Vector Field (Blue Arrows)");
+% Release the hold on the plot.
+hold off;
+
+% --- Local Functions ---
+
+% Define the function to evolve the snake contour.
+function [newSnakeX, newSnakeY] = EvolveSnake(snakeX, snakeY, alpha, beta, balloonForce, gvfU, gvfV, imageHeight, imageWidth, numPoints, iterations)
+    % Loop through the snake iterations.
+    for iter = 1:1:iterations
+        % Initialize the new snake X coordinates.
+        newSnakeX = zeros(1, numPoints);
+        % Initialize the new snake Y coordinates.
+        newSnakeY = zeros(1, numPoints);
+        % Calculate the centroid X coordinate of the snake.
+        centroidX = mean(snakeX);
+        % Calculate the centroid Y coordinate of the snake.
+        centroidY = mean(snakeY);
+
+        % Loop through each point in the snake.
+        for k = 1:1:numPoints
+            % Get the previous point index with wrap around.
+            prevIdx = mod(k - 2, numPoints) + 1;
+            % Get the next point index with wrap around.
+            nextIdx = mod(k, numPoints) + 1;
+
+            % Calculate the internal smoothing force in the X direction.
+            internalForceX = snakeX(prevIdx) - 2 * snakeX(k) + snakeX(nextIdx);
+            % Calculate the internal smoothing force in the Y direction.
+            internalForceY = snakeY(prevIdx) - 2 * snakeY(k) + snakeY(nextIdx);
+
+            % Calculate the horizontal vector from the centroid to the point.
+            dx = snakeX(k) - centroidX;
+            % Calculate the vertical vector from the centroid to the point.
+            dy = snakeY(k) - centroidY;
+            % Calculate the distance from the centroid to the point.
+            dist = sqrt(dx^2 + dy^2);
+            
+            % Compute the outward balloon direction only when distance is valid.
+            if (dist > 0)
+                % Calculate the normalized horizontal balloon component.
+                balloonX = dx / dist;
+                % Calculate the normalized vertical balloon component.
+                balloonY = dy / dist;
+            else
+                % Set the horizontal balloon component to zero.
+                balloonX = 0;
+                % Set the vertical balloon component to zero.
+                balloonY = 0;
+                % End the distance check.
+            end
+
+            % Round the current X coordinate to an integer for field lookup.
+            currX = round(snakeX(k));
+            % Round the current Y coordinate to an integer for field lookup.
+            currY = round(snakeY(k));
+            % Clamp the lookup X coordinate to the image bounds.
+            currX = max(1, min(imageWidth, currX));
+            % Clamp the lookup Y coordinate to the image bounds.
+            currY = max(1, min(imageHeight, currY));
+            
+            % Pull the horizontal external force from the GVF field.
+            extX = gvfU(currY, currX);
+            % Pull the vertical external force from the GVF field.
+            extY = gvfV(currY, currX);
+
+            % Update the X coordinate using internal, balloon, and external forces.
+            newSnakeX(k) = snakeX(k) + alpha * internalForceX + balloonForce * balloonX + beta * extX;
+            % Update the Y coordinate using internal, balloon, and external forces.
+            newSnakeY(k) = snakeY(k) + alpha * internalForceY + balloonForce * balloonY + beta * extY;
+
+            % Clamp the new X coordinate to the image bounds.
+            newSnakeX(k) = max(1, min(imageWidth, newSnakeX(k)));
+            % Clamp the new Y coordinate to the image bounds.
+            newSnakeY(k) = max(1, min(imageHeight, newSnakeY(k)));
+            % End the point loop.
+        end
+        % Update the snake X coordinates.
+        snakeX = newSnakeX;
+        % Update the snake Y coordinates.
+        snakeY = newSnakeY;
+        % End the snake iteration loop.
+    end
+    % End the function definition.
+end
+
+% Define the function to calculate the contour score.
+function score = CalculateEdgeScore(snakeX, snakeY, gradientMap, imageHeight, imageWidth)
+    % Round the contour X coordinates to integer pixel positions.
+    contourCol = round(snakeX);
+    % Round the contour Y coordinates to integer pixel positions.
+    contourRow = round(snakeY);
+    % Clamp the contour column indices to the image bounds.
+    contourCol = max(1, min(imageWidth, contourCol));
+    % Clamp the contour row indices to the image bounds.
+    contourRow = max(1, min(imageHeight, contourRow));
+    
+    % Sample the gradient magnitude at the snake points using linear indices.
+    indices = sub2ind([imageHeight, imageWidth], contourRow, contourCol);
+    % Extract the edge values at the sampled indices.
+    edgeValues = gradientMap(indices);
+    
+    % Calculate the mean edge strength as the final score.
+    score = mean(edgeValues);
+    % End the function definition.
+end

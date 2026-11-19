@@ -1,4 +1,3 @@
-% The file name is Snippet_35_Active_Contour_Energy.m.
 % Clear the command window.
 clc;
 % Close all open figure windows.
